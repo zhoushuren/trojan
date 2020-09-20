@@ -20,6 +20,7 @@
 #include "authenticator.h"
 #include <cstdlib>
 #include <stdexcept>
+#include <ctime>
 using namespace std;
 
 #ifdef ENABLE_MYSQL
@@ -50,7 +51,7 @@ bool Authenticator::auth(const string &password) {
     if (!is_valid_password(password)) {
         return false;
     }
-    if (mysql_query(&con, ("SELECT quota, download + upload FROM users WHERE password = '" + password + '\'').c_str())) {
+    if (mysql_query(&con, ("SELECT quota, download + upload, expire_time, status FROM users WHERE password = '" + password + '\'').c_str())) {
         Log::log_with_date_time(mysql_error(&con), Log::ERROR);
         return false;
     }
@@ -66,7 +67,15 @@ bool Authenticator::auth(const string &password) {
     }
     int64_t quota = atoll(row[0]);
     int64_t used = atoll(row[1]);
+    int64_t expire_time = atoll(row[2]);
     mysql_free_result(res);
+
+    // 判断是否过期，过期则不能连接
+    std::time_t now = std::time(0);
+    if(expire_time > now) {
+        return false;
+    }
+
     if (quota < 0) {
         return true;
     }
